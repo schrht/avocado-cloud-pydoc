@@ -5,8 +5,10 @@ Dump the information of the avocado-cloud testcases.
 
 import argparse
 import logging
-import yaml
+import sys
 import os
+import importlib
+import inspect
 import pandas as pd
 
 LOG = logging.getLogger(__name__)
@@ -40,23 +42,42 @@ ARG_PARSER.add_argument('--output',
                         required=False)
 
 
-def parse_py_files(pypath):
-    """Parse the test_*.py files.
+def load_pydoc(pypath):
+    """Load pydoc for each testcases from the *.py files.
 
     Input:
-        - pypath: the path of test_*.py files.
+        - pypath: the py file or the folder container multiple py files.
     Return:
-        - dict: information of the testcases.
+        - testcases: a list of dict contains testcase names and their pydoc.
     """
 
-    with open(pypath, 'r') as f:
-        lines = f.readlines()
+    # Init data
+    testcases = []
 
-    # class_name
-    # function_names
-    for line in lines:
-        print(line)
+    # TODO: Create testcode.py from py file(s)
+    os.system('cp -f {} /tmp/testcode.py'.format(pypath))
 
+    # Remove class inheritance
+    os.system('sed -i "/^from .* import/d" /tmp/testcode.py')
+    os.system('sed -i "/^import /d" /tmp/testcode.py')
+    os.system('sed -i "s/\\(^class .*\\)(Test):/\\1():/" /tmp/testcode.py')
+
+    # Load modules from testcode
+    sys.path.append('/tmp')
+    testcode = importlib.import_module('testcode')
+
+    # Extarct the func and pydoc
+    clsmembers = inspect.getmembers(testcode, inspect.isclass)
+    for clsmember in clsmembers:
+        funcmembers = inspect.getmembers(clsmember[1], inspect.isfunction)
+        for funcmember in funcmembers:
+            # Filter out the testcases
+            if funcmember[0].startswith('test_'):
+                name = clsmember[0] + '.' + funcmember[0]
+                doc = funcmember[1].__doc__
+                testcases.append({'func': name, 'pydoc': doc})
+
+    return testcases
 
 
 def dump_dataframe(dataframe, output_format='csv', filename='file.csv'):
@@ -78,6 +99,7 @@ if __name__ == '__main__':
     ARGS = ARG_PARSER.parse_args()
 
     # Parse testcases
-    parse_py_files(ARGS.pypath + '/test_functional_checkup.py')
+    testcases = load_pydoc(ARGS.pypath + '/test_functional_checkup.py')
+    print(testcases)
 
 exit(0)
