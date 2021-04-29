@@ -80,6 +80,62 @@ def load_pydoc(pypath):
     return testcases
 
 
+def analyse_pydoc(testcases, product):
+    def _get_value(key):
+        if pydoc is None:
+            return None
+        if '{}:'.format(key) not in pydoc:
+            return None
+
+        idx = pydoc.index('{}:'.format(key))
+        ctx = []
+        for line in pydoc[idx + 1:]:
+            if line.endswith(':'):
+                break
+            ctx.append(line)
+        value = '\n'.join(ctx)
+
+        if value in ('', 'n/a', 'N/A'):
+            return None
+        else:
+            return value
+
+    for testcase in testcases:
+        if testcase['pydoc']:
+            pydoc = testcase['pydoc'].split('\n')
+            pydoc = [x.strip() for x in pydoc if x.strip() != '']
+        else:
+            pydoc = None
+
+        testcase['Title'] = '[{}]{}'.format(product, testcase.get('func'))
+        testcase['TCMS Bug'] = _get_value('bugzilla_id')
+
+        if _get_value('customer_case_id'):
+            testcase['Customer Scenario'] = True
+        else:
+            testcase['Customer Scenario'] = False
+
+        testcase['Author'] = _get_value('maintainer')
+
+        importance = _get_value('case_priority')
+        if importance is None:
+            testcase['Importance'] = None
+        elif importance.lower in ('critical', 'high', 'medium', 'low'):
+            testcase['Importance'] = importance.lower
+        else:
+            testcase['Importance'] = {
+                '0': 'critical',
+                '1': 'high',
+                '2': 'medium',
+                '3': 'low'
+            }.get(importance)
+
+        testcase['Step'] = _get_value('key_steps')
+        testcase['Expected Result'] = _get_value('pass_criteria')
+
+    print(testcases)
+
+
 def dump_dataframe(dataframe, output_format='csv', filename='file.csv'):
     """Dump the testcase information to a file.
 
@@ -100,6 +156,6 @@ if __name__ == '__main__':
 
     # Parse testcases
     testcases = load_pydoc(ARGS.pypath + '/test_functional_checkup.py')
-    print(testcases)
+    analyse_pydoc(testcases[-10:-1], ARGS.product)
 
 exit(0)
