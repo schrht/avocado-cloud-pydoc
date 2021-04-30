@@ -9,6 +9,7 @@ import sys
 import os
 import importlib
 import inspect
+import json
 import pandas as pd
 
 LOG = logging.getLogger(__name__)
@@ -30,15 +31,15 @@ ARG_PARSER.add_argument('--pypath',
 ARG_PARSER.add_argument('--output-format',
                         dest='output_format',
                         action='store',
-                        choices=('csv', 'html'),
+                        choices=('json', 'csv', 'html'),
                         help='The output file format.',
-                        default='csv',
+                        default='json',
                         required=False)
 ARG_PARSER.add_argument('--output',
                         dest='output',
                         action='store',
                         help='The file to store testcase information.',
-                        default='testcases.csv',
+                        default='testcases.json',
                         required=False)
 
 
@@ -49,8 +50,11 @@ class TestDocGenerator():
 
         self.testcases = []
 
+        self.load_pydoc()
+        self.analyse_pydoc()
+
     def load_pydoc(self):
-        """Load pydoc for each testcase from the *.py files.
+        """Load pydoc for each testcase from the test_*.py files.
 
         Input:
             - self.pypath: the py file or the folder with multiple py files.
@@ -82,6 +86,13 @@ class TestDocGenerator():
                     self.testcases.append({'func': name, 'pydoc': doc})
 
     def analyse_pydoc(self):
+        """Analyse pydoc for each testcase.
+
+        Input:
+            - self.testcases: func name and the pydoc.
+        Update:
+            - self.testcases: func name and the pydoc.
+        """
         def _get_value(key):
             if pydoc is None:
                 return None
@@ -102,7 +113,7 @@ class TestDocGenerator():
                 return value
 
         for testcase in self.testcases:
-            if testcase['pydoc']:
+            if testcase.get('pydoc'):
                 pydoc = testcase['pydoc'].split('\n')
                 pydoc = [x.strip() for x in pydoc if x.strip() != '']
             else:
@@ -135,18 +146,29 @@ class TestDocGenerator():
             testcase['Step'] = _get_value('key_steps')
             testcase['Expected Result'] = _get_value('pass_criteria')
 
-    def dump_dataframe(dataframe, output_format='csv', filename='file.csv'):
-        """Dump the testcase information to a file.
+            if pydoc:
+                testcase['Description'] = '\n'.join(pydoc)
+            else:
+                testcase['Description'] = None
+
+    def dump_json(self, path):
+        """Dump the information to a json file.
 
         Input:
-            - dataframe: information of the testcases.
+            - path: the output file.
         """
-        if output_format == 'csv':
-            with open(filename, 'w') as f:
-                f.write(dataframe.to_csv())
-        else:
-            with open(filename, 'w') as f:
-                f.write(dataframe.to_html())
+        with open(path, 'w') as f:
+            json.dump(self.testcases, f, indent=3, sort_keys=False)
+
+    def dump_csv(self, path):
+        """Dump the information to a csv file.
+
+        Input:
+            - path: the output file.
+        """
+        dataframe = pd()
+        with open(path, 'w') as f:
+            f.write(dataframe.to_csv())
 
 
 if __name__ == '__main__':
@@ -154,10 +176,8 @@ if __name__ == '__main__':
     ARGS = ARG_PARSER.parse_args()
 
     # Parse testcases
-    tdg = TestDocGenerator(ARGS.product,
-                           ARGS.pypath + '/test_functional_checkup.py')
-    tdg.load_pydoc()
-    tdg.analyse_pydoc()
-    print(tdg.testcases)
+    tdg = TestDocGenerator(ARGS.product, ARGS.pypath)
+
+    tdg.dump_json(ARGS.output)
 
 exit(0)
