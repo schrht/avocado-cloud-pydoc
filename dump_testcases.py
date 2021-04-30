@@ -148,7 +148,10 @@ class TestDocGenerator():
             else:
                 data['Customer Scenario'] = False
 
-            data['Author'] = self._query_pydoc('maintainer', pydoc)
+            author = self._query_pydoc('maintainer', pydoc)
+            if author and author.endswith('@redhat.com'):
+                author = author.replace('@redhat.com', '')
+            data['Author'] = author
 
             importance = self._query_pydoc('case_priority', pydoc)
             if importance is None:
