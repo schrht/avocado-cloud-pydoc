@@ -14,7 +14,11 @@
                 "--product",
                 "Aliyun",
                 "--pypath",
-                "./avocado-cloud/tests/alibaba"
+                "./avocado-cloud/tests/alibaba",
+                "--output-format",
+                "json-polarion",
+                "--output",
+                "testcases.json"
             ]
         }
     ]

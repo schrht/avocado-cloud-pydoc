@@ -31,7 +31,7 @@ ARG_PARSER.add_argument('--pypath',
 ARG_PARSER.add_argument('--output-format',
                         dest='output_format',
                         action='store',
-                        choices=('json', 'csv', 'html'),
+                        choices=('json', 'json-polarion', 'csv', 'html'),
                         help='The output file format.',
                         default='json',
                         required=False)
@@ -48,10 +48,10 @@ class TestDocGenerator():
         self.product = product
         self.pypath = pypath
 
-        self.testcases = []
+        self.pydocs = []
+        self.polarion_data = []
 
         self.load_pydoc()
-        self.analyse_pydoc()
 
     def load_pydoc(self):
         """Load pydoc for each testcase from the test_*.py files.
@@ -59,7 +59,7 @@ class TestDocGenerator():
         Input:
             - self.pypath: the py file or the folder with multiple py files.
         Update:
-            - self.testcases: func name and the pydoc.
+            - self.pydocs: list of func name and the pydoc.
         """
 
         # Create testcode.py from py file(s)
@@ -89,85 +89,103 @@ class TestDocGenerator():
                 # Filter out the testcases
                 if funcmember[0].startswith('test_'):
                     name = clsmember[0] + '.' + funcmember[0]
-                    doc = funcmember[1].__doc__
-                    self.testcases.append({'func': name, 'pydoc': doc})
+                    docstr = funcmember[1].__doc__
+                    doc = None if not docstr else [
+                        x.strip() for x in docstr.split('\n')
+                        if x.strip() != ''
+                    ]
+                    self.pydocs.append({
+                        'func': name,
+                        'pydoc_str': docstr,
+                        'pydoc': doc
+                    })
 
-    def analyse_pydoc(self):
-        """Analyse pydoc for each testcase.
+        return 0
+
+    def _query_pydoc(self, name, pydoc, none_for_na=True):
+        """Query the value of specified field name from pydoc.
 
         Input:
-            - self.testcases: func name and the pydoc.
-        Update:
-            - self.testcases: func name and the pydoc.
+            - name: the field name.
+            - pydoc: the list of a pydoc lines.
+        Return:
+            - string: value of the specified field name.
         """
-        def _get_value(key):
-            if pydoc is None:
-                return None
-            if '{}:'.format(key) not in pydoc:
-                return None
+        if pydoc is None:
+            return None
+        if '{}:'.format(name) not in pydoc:
+            return None
 
-            idx = pydoc.index('{}:'.format(key))
-            ctx = []
-            for line in pydoc[idx + 1:]:
-                if line.endswith(':'):
-                    break
-                ctx.append(line)
-            value = '\n'.join(ctx)
+        idx = pydoc.index('{}:'.format(name))
+        cnt = []
+        for line in pydoc[idx + 1:]:
+            if line.endswith(':'):
+                break
+            cnt.append(line)
+        value = '\n'.join(cnt)
 
-            if value in ('', 'n/a', 'N/A'):
-                return None
+        if none_for_na and value.lower() in ('', 'n/a', 'na'):
+            return None
+        else:
+            return value
+
+    def parse_pydoc_polarion(self):
+        """Parse pydoc for polarion usage.
+
+        Update:
+            - self.polarion_data: the data for polarion usage.
+        """
+        for case in self.pydocs:
+            func = case.get('func')
+            pydoc = case.get('pydoc')
+
+            data = {}
+            data['Title'] = '[{}]{}'.format(self.product, func)
+            data['TCMS Bug'] = self._query_pydoc('bugzilla_id', pydoc)
+
+            if self._query_pydoc('customer_case_id', pydoc):
+                data['Customer Scenario'] = True
             else:
-                return value
+                data['Customer Scenario'] = False
 
-        for testcase in self.testcases:
-            if testcase.get('pydoc'):
-                pydoc = testcase['pydoc'].split('\n')
-                pydoc = [x.strip() for x in pydoc if x.strip() != '']
-            else:
-                pydoc = None
+            data['Author'] = self._query_pydoc('maintainer', pydoc)
 
-            testcase['Title'] = '[{}]{}'.format(self.product,
-                                                testcase.get('func'))
-            testcase['TCMS Bug'] = _get_value('bugzilla_id')
-
-            if _get_value('customer_case_id'):
-                testcase['Customer Scenario'] = True
-            else:
-                testcase['Customer Scenario'] = False
-
-            testcase['Author'] = _get_value('maintainer')
-
-            importance = _get_value('case_priority')
+            importance = self._query_pydoc('case_priority', pydoc)
             if importance is None:
-                testcase['Importance'] = None
+                data['Importance'] = None
             elif importance.lower in ('critical', 'high', 'medium', 'low'):
-                testcase['Importance'] = importance.lower
+                data['Importance'] = importance.lower
             else:
-                testcase['Importance'] = {
+                data['Importance'] = {
                     '0': 'critical',
                     '1': 'high',
                     '2': 'medium',
                     '3': 'low'
                 }.get(importance)
 
-            testcase['Step'] = _get_value('key_steps')
-            testcase['Expected Result'] = _get_value('pass_criteria')
+            data['Step'] = self._query_pydoc('key_steps', pydoc)
+            data['Expected Result'] = self._query_pydoc('pass_criteria', pydoc)
 
             if pydoc:
-                testcase['Description'] = '\n'.join(pydoc)
+                data['Description'] = '\n'.join(pydoc)
             else:
-                testcase['Description'] = None
+                data['Description'] = None
 
-    def dump_json(self, path):
-        """Dump the information to a json file.
+            self.polarion_data.append(data)
+
+        return 0
+
+    def _dump_json(self, data, path):
+        """Dump the data to a json file.
 
         Input:
+            - data: a json list.
             - path: the output file.
         """
         with open(path, 'w') as f:
-            json.dump(self.testcases, f, indent=3, sort_keys=False)
+            json.dump(data, f, indent=3, sort_keys=False)
 
-    def dump_csv(self, path):
+    def _dump_csv(self, path):
         """Dump the information to a csv file.
 
         Input:
@@ -177,6 +195,14 @@ class TestDocGenerator():
         with open(path, 'w') as f:
             f.write(dataframe.to_csv())
 
+    def dump_polarion_json(self, path):
+        """Dump polarion data to a json file.
+
+        Input:
+            - path: the output file.
+        """
+        self._dump_json(self.polarion_data, path)
+
 
 if __name__ == '__main__':
     # Parse args
@@ -184,7 +210,8 @@ if __name__ == '__main__':
 
     # Parse testcases
     tdg = TestDocGenerator(ARGS.product, ARGS.pypath)
-
-    tdg.dump_json(ARGS.output)
+    if ARGS.output_format == 'json-polarion':
+        tdg.parse_pydoc_polarion()
+        tdg.dump_polarion_json(ARGS.output)
 
 exit(0)
