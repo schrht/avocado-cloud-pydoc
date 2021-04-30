@@ -26,7 +26,7 @@ ARG_PARSER.add_argument('--product',
 ARG_PARSER.add_argument('--pypath',
                         dest='pypath',
                         action='store',
-                        help='The path of test_*.py files.',
+                        help='The path of test_*.py file or its directory.',
                         required=True)
 ARG_PARSER.add_argument('--output-format',
                         dest='output_format',
@@ -62,8 +62,15 @@ class TestDocGenerator():
             - self.testcases: func name and the pydoc.
         """
 
-        # TODO: Create testcode.py from py file(s)
-        os.system('cp -f {} /tmp/testcode.py'.format(self.pypath))
+        # Create testcode.py from py file(s)
+        if os.path.isfile(self.pypath):
+            os.system('cp -f {} /tmp/testcode.py'.format(self.pypath))
+        elif os.path.isdir(self.pypath):
+            os.system('cat {}/test_*.py > /tmp/testcode.py'.format(
+                self.pypath))
+        else:
+            logging.error('Invalid path {}'.format(self.pypath))
+            exit(1)
 
         # Remove class inheritance
         os.system('sed -i "/^from .* import/d" /tmp/testcode.py')
