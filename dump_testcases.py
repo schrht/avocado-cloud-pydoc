@@ -13,7 +13,7 @@ import json
 import pandas as pd
 
 LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
 
 ARG_PARSER = argparse.ArgumentParser(
     description="Dump pydoc content from the avocado-cloud test code.")
@@ -84,9 +84,16 @@ class TestDocGenerator():
         # Extarct the func and pydoc
         clsmembers = inspect.getmembers(testcode, inspect.isclass)
         for clsmember in clsmembers:
-            funcmembers = inspect.getmembers(clsmember[1], inspect.isfunction)
+            logging.debug('Class Name: {}'.format(clsmember[1]))
+            if sys.version_info.major == 2:
+                funcmembers = inspect.getmembers(clsmember[1],
+                                                 inspect.ismethod)
+            else:
+                funcmembers = inspect.getmembers(clsmember[1],
+                                                 inspect.isfunction)
             for funcmember in funcmembers:
                 # Filter out the testcases
+                logging.debug('Function Name: {}'.format(funcmember[1]))
                 if funcmember[0].startswith('test_'):
                     name = clsmember[0] + '.' + funcmember[0]
                     docstr = funcmember[1].__doc__
