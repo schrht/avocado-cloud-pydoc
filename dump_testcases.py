@@ -173,11 +173,15 @@ class TestDocGenerator():
                     '3': 'low'
                 }.get(importance)
 
-            data['Step'] = self._query_pydoc('key_steps', pydoc)
+            step = self._query_pydoc('key_steps', pydoc)
+            if isinstance(step, str):
+                step = step.replace('\n', '<br/>')
+            data['Step'] = step
+
             data['Expected Result'] = self._query_pydoc('pass_criteria', pydoc)
 
             if pydoc:
-                data['Description'] = '\n'.join(pydoc)
+                data['Description'] = '<br/>'.join(pydoc)
             else:
                 data['Description'] = None
 
