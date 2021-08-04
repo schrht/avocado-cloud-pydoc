@@ -63,22 +63,26 @@ class TestDocGenerator():
         """
 
         # Create testcode.py from py file(s)
+        tmppath = '/tmp/{}'.format(os.getpid())
+        os.system('mkdir -p {}'.format(tmppath))
+
         if os.path.isfile(self.pypath):
-            os.system('cp -f {} /tmp/testcode.py'.format(self.pypath))
+            os.system('cp -f {} {}/testcode.py'.format(self.pypath, tmppath))
         elif os.path.isdir(self.pypath):
-            os.system('cat {}/test_*.py > /tmp/testcode.py'.format(
-                self.pypath))
+            os.system('cat {}/test_*.py > {}/testcode.py'.format(
+                self.pypath, tmppath))
         else:
             logging.error('Invalid path {}'.format(self.pypath))
             exit(1)
 
         # Remove class inheritance
-        os.system('sed -i "/^from .* import/d" /tmp/testcode.py')
-        os.system('sed -i "/^import /d" /tmp/testcode.py')
-        os.system('sed -i "s/\\(^class .*\\)(Test):/\\1():/" /tmp/testcode.py')
+        os.system('sed -i "/^from .* import/d" {}/testcode.py'.format(tmppath))
+        os.system('sed -i "/^import /d" {}/testcode.py'.format(tmppath))
+        os.system(
+            'sed -i "s/\\(^class .*\\)(Test):/\\1():/" {}/testcode.py'.format(tmppath))
 
         # Load modules from testcode
-        sys.path.append('/tmp')
+        sys.path.append(tmppath)
         testcode = importlib.import_module('testcode')
 
         # Extarct the func and pydoc
